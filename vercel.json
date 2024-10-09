@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "functions": {
+    "api/bot.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  },
+  "routes": [
+    {
+      "src": "/api/bot",
+      "dest": "/api/bot.js"
+    }
+  ],
+  "env": {
+    "BOT_TOKEN": "@bot_token",
+    "BLOB_READ_WRITE_TOKEN": "@blob_read_write_token"
+  }
+}
