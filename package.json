@@ -1,0 +1,11 @@
+{
+  "name": "direct-link-downloader-pro-bot",
+  "version": "1.0.0",
+  "main": "api/bot.js",
+  "type": "module",
+  "dependencies": {
+    "@vercel/blob": "^1.0.0",
+    "axios": "^1.0.0",
+    "telegraf": "^4.12.2"
+  }
+}
