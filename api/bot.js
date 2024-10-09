@@ -74,7 +74,6 @@ bot.on('text', async (ctx) => {
     await ctx.replyWithDocument({ url: blob.url, filename }, {
       caption: `✅ Successfully downloaded: ${filename}`,
     });
-
   } catch (error) {
     console.error(error);
     ctx.reply('❌ There was an error downloading the file. Please check the URL and try again.');
