@@ -1,30 +1,30 @@
-import { Telegraf } from 'telegraf';
-import axios from 'axios';
-import { put } from '@vercel/blob';
-import { schedule } from '@vercel/cron';
 
-const bot = new Telegraf(process.env.BOT_TOKEN);
+const { Telegraf } = require('telegraf');
+const config = require('../config');
+const logger = require('../src/logger');
+const { startHandler, helpHandler, downloadHandler } = require('../src/botHandlers');
 
-// Main handler for all requests
-export default async function handler(req, res) {
-  // Check if the request is for the root URL to serve the HTML page
-  if (req.url === "/") {
+const bot = new Telegraf(config.botToken);
+
+module.exports = async (req, res) => {
+  if (req.method === 'GET') {
     serveHtmlPage(res);
     return;
   }
 
-  try {
-    await bot.handleUpdate(req.body);
-    res.status(200).send('OK');
-  } catch (err) {
-    console.error('Error handling update:', err);
-    res.status(500).send('Error');
+  if (req.method === 'POST') {
+    try {
+      await bot.handleUpdate(req.body);
+      res.status(200).send('OK');
+    } catch (err) {
+      logger.error('Error handling update:', err);
+      res.status(500).send('Error');
+    }
   }
-}
+};
 
-// Function to serve HTML content
 function serveHtmlPage(res) {
-  const htmlContent = `
+  const htmlContent = \`
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -36,106 +36,37 @@ function serveHtmlPage(res) {
         <meta property="og:description" content="Automatically download files directly through Telegram!">
         <meta property="og:url" content="https://t.me/DirectLinkDownloaderProBot">
         <meta property="og:type" content="website">
-        <meta property="og:image" content="url_to_image_for_social_media_preview">
+        <meta property="og:image" content="https://example.com/bot-preview-image.jpg">
+        <link rel="stylesheet" href="/public/styles.css">
+        <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
+            h1 { color: #0088cc; }
+            a { color: #0088cc; text-decoration: none; }
+            a:hover { text-decoration: underline; }
+        </style>
     </head>
     <body>
         <h1>Welcome to Direct Link Downloader Pro Bot!</h1>
         <p>Use this bot to download files directly through Telegram without hassle. Join the bot <a href="https://t.me/DirectLinkDownloaderProBot">here</a>.</p>
+        <p>Features:</p>
+        <ul>
+            <li>Download files from direct links</li>
+            <li>Automatic file deletion after 1 hour</li>
+            <li>Support for various file types</li>
+            <li>Easy-to-use interface</li>
+        </ul>
         <p>Need help? Visit our support channel: <a href="https://t.me/RexxCheat">Support Channel</a></p>
     </body>
     </html>
-  `;
+  \`;
   res.setHeader('Content-Type', 'text/html');
   res.status(200).send(htmlContent);
 }
 
-// Telegraf handlers
-bot.start((ctx) => {
-  ctx.reply(
-    '🚀 Welcome to Direct Link Downloader Pro Bot! Send me any direct download link, and I will fetch the file for you!',
-    {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '📁 Browse Files', callback_data: 'browse' }],
-          [{ text: '🛠 Get Help', callback_data: 'help' }],
-          [{ text: 'Support Channel', url: 'https://t.me/RexxCheat' }],
-        ],
-      },
-    }
-  );
+bot.start(startHandler);
+bot.command('help', helpHandler);
+bot.on('text', downloadHandler);
+
+bot.catch((err) => {
+  logger.error('Telegraf error:', err);
 });
-
-bot.command('help', (ctx) => {
-  ctx.reply(
-    '🛠 *Help Menu*\n\nSend me any direct download link, and I will fetch the file for you.\n\n*Commands:*\n/start - Restart the bot\n/help - Show this help message',
-    { parse_mode: 'Markdown' }
-  );
-});
-
-bot.on('text', async (ctx) => {
-  const url = ctx.message.text.trim();
-
-  if (!isValidUrl(url)) {
-    return ctx.reply('❌ Invalid URL! Please send a valid direct download link.');
-  }
-
-  const message = await ctx.reply('🔄 Fetching your file, please wait...');
-
-  try {
-    const headResponse = await axios.head(url);
-    const contentLength = headResponse.headers['content-length'];
-    const maxFileSize = 50 * 1024 * 1024; // 50 MB limit
-
-    if (parseInt(contentLength) > maxFileSize) {
-      return ctx.reply('❌ The file is too large to be sent over Telegram.');
-    }
-
-    const filename = getFilenameFromUrl(url, headResponse.headers);
-    const response = await axios.get(url, { responseType: 'arraybuffer' });
-    
-    const blob = await put(filename, response.data, {
-      access: 'public',
-      addRandomSuffix: false,
-      token: process.env.BLOB_READ_WRITE_TOKEN,
-    });
-
-    await ctx.replyWithDocument({ url: blob.url, filename }, { caption: `✅ Successfully downloaded: ${filename}` });
-    
-    // Schedule file removal after 7 days
-    const removeDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    schedule(`remove-file-${blob.url}`, removeDate, async () => {
-      try {
-        await axios.delete(blob.url, {
-          headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` }
-        });
-        console.log(`File removed: ${filename}`);
-      } catch (error) {
-        console.error(`Error removing file ${filename}:`, error);
-      }
-    });
-
-  } catch (error) {
-    console.error(error);
-    ctx.reply('❌ There was an error downloading the file. Please check the URL and try again.');
-  }
-});
-
-// Helper functions
-function isValidUrl(url) {
-  try {
-    const parsedUrl = new URL(url);
-    return parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
-
-function getFilenameFromUrl(url, headers) {
-  const disposition = headers['content-disposition'];
-  if (disposition && disposition.includes('filename=')) {
-    const matches = disposition.match(/filename="?(.+)"?/);
-    return matches ? matches[1] : 'file';
-  } else {
-    return decodeURIComponent(new URL(url).pathname.split('/').pop());
-  }
-}

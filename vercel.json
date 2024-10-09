@@ -1,3 +1,4 @@
+
 {
   "version": 2,
   "builds": [
@@ -11,5 +12,8 @@
       "src": "/(.*)",
       "dest": "/api/bot.js"
     }
-  ]
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  }
 }
